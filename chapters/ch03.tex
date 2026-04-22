@@ -1,0 +1,490 @@
+\chapter{Performance Metrics and the PRAM Model}
+
+\section{Revisiting Performance Metrics}
+
+Understanding how a parallel program performs requires more than just measuring
+wall-clock time. We need a vocabulary that captures \emph{how efficiently}
+resources are used and \emph{how well} a solution scales as resources and
+problem sizes change.
+
+\begin{ppdefn}
+Let $T_1$ denote the time taken on a single sequential processor, and $T_p$ the
+time taken on a parallel system with $p$ processors. The \ppterm{speedup} is
+\[
+  S_p \;:=\; \frac{T_1}{T_p}.
+\]
+Ideal speedup on $p$ processors is $S_p = p$.
+\end{ppdefn}
+
+\begin{ppdefn}
+The \ppterm{cost} of a parallel execution is
+\[
+  C_p \;:=\; p \times T_p.
+\]
+It captures the total processor-time expended. A parallel algorithm is
+\ppterm{cost-optimal} when $p \cdot T_p = O(T_1)$, i.e., the total work
+done is asymptotically no more than the sequential baseline.
+\end{ppdefn}
+
+\begin{ppexample}
+Suppose $T_1 = 100$ and $T_8 = 20$. Then $S_8 = 5$ and $C_8 = 160$. The
+parallel system used 60\% more total processor-time than a sequential run,
+so it is not cost-optimal.
+\end{ppexample}
+
+\subsection{Overhead and Efficiency}
+
+Running on $p$ processors introduces overhead from communication,
+synchronisation, and idle time. These reduce efficiency below the ideal.
+
+\begin{ppdefn}
+The \ppterm{parallelism overhead} $T_o$ (also written $\bar{o}_p$) is the
+extra work introduced by running in parallel:
+\[
+  T_o \;:=\; C_p - T_1 \;=\; p \cdot T_p - T_1.
+\]
+\end{ppdefn}
+
+\begin{ppdefn}
+\ppterm{Efficiency} measures how effectively processors are utilised:
+\[
+  E_p \;:=\; \frac{T_1}{C_p} \;=\; \frac{S_p}{p}.
+\]
+Efficiency is 1 when $S_p = p$ (ideal), and falls as overhead grows.
+\end{ppdefn}
+
+\begin{ppexample}
+Consider two configurations: $S_8 = 7$ and $S_{64} = 20$.
+\[
+  E_8 = \frac{7}{8} = 0.875, \qquad E_{64} = \frac{20}{64} \approx 0.31.
+\]
+The 64-processor run achieves higher absolute speedup but is far less efficient:
+nearly 70\% of processor time is wasted on overhead.
+\end{ppexample}
+
+\begin{pppitfall}
+Raw speedup numbers can be misleading. Always report efficiency alongside
+speedup---a speedup of 20 on 64 processors is underwhelming, not impressive.
+\end{pppitfall}
+
+\section{Scalability}
+
+Raw speedup is a snapshot at one problem size and one processor count.
+\ppterm{Scalability} asks how performance evolves as \emph{both} problem
+size $n$ and processor count $p$ change.
+
+Formally, we now treat time as $T(n, p)$---a function of both parameters---and
+interpret speedup, efficiency, and cost accordingly.
+
+\subsection{Strong Scaling}
+
+\ppterm{Strong scaling} studies what happens when the problem size $n$ is
+held fixed and $p$ increases.
+
+\begin{ppdefn}
+Ideal strong scaling: $T(n, p) = T(n, 1)/p$ for fixed $n$.
+\end{ppdefn}
+
+In practice the actual parallel time decomposes as
+\[
+  T(n, p) = T_{\text{comp}} + T_{\text{comm}} + T_{\text{sync}} + T_{\text{idle}}.
+\]
+Only $T_{\text{comp}}$ shrinks with $p$; the remaining terms are overheads that
+grow with $p$ and eventually dominate, causing strong scaling to break down.
+
+\subsection{Weak Scaling}
+
+\ppterm{Weak scaling} studies what happens when each processor is assigned a
+fixed workload $m$, so the total problem size grows as $mp$ when $p$ increases.
+
+\begin{ppdefn}
+Ideal weak scaling: $T(mp, p) = T(m, 1)$---runtime stays constant as both
+problem size and processor count grow proportionally.
+\end{ppdefn}
+
+\begin{ppexample}
+A weakly scaling system might show:
+\begin{center}
+\begin{tabular}{ccc}
+\toprule
+$p$ & Problem size & Time (s) \\
+\midrule
+1  & 1 million & 10 \\
+2  & 2 million & 11 \\
+4  & 4 million & 13 \\
+\bottomrule
+\end{tabular}
+\end{center}
+Runtime grows only slightly---the small increase is due to communication
+overhead that scales sub-linearly.
+\end{ppexample}
+
+\section{Amdahl's Law}
+
+\begin{ppkey}
+Amdahl's Law bounds the speedup achievable for a fixed problem size when
+only a fraction of the computation is parallelisable.
+\end{ppkey}
+
+Suppose a fraction $f$ of the total work is inherently sequential and
+$(1 - f)$ is fully parallelisable. Then:
+\[
+  T_p = T_1\!\left(f + \frac{1-f}{p}\right),
+  \qquad
+  S_p = \frac{1}{f + (1-f)/p},
+  \qquad
+  S_\infty = \frac{1}{f}.
+\]
+
+\begin{ppexample}
+If only 10\% of the program is sequential ($f = 0.1$), the maximum possible
+speedup is $S_\infty = 1/0.1 = 10$, regardless of how many processors are
+added. Figure~\ref{fig:amdahl-speedup} illustrates how speedup saturates for
+different values of $n$.
+\end{ppexample}
+
+% [Figure needed: Amdahl speedup curves for varying n (n=64, 192, 512),
+%  speedup (y-axis) vs. processor count p (x-axis), showing saturation.
+%  Source: Lecture 22, Slide 6.]
+
+\begin{pppitfall}
+Improving the parallel portion of a program yields diminishing returns if the
+sequential fraction remains significant. Amdahl's Law is the formal statement
+of this limit. Optimising the hot loop by $10\times$ is irrelevant if the
+sequential setup and teardown dominate.
+\end{pppitfall}
+
+Amdahl's Law applies to fixed problem sizes. It does not capture what happens
+when workload grows with the number of processors---that is Gustafson's domain.
+
+\section{Gustafson's Law}
+
+Amdahl's Law is pessimistic because it holds problem size fixed. In practice,
+when more processors become available, practitioners scale up the problem size
+to do more useful work.
+
+\begin{ppkey}
+As $p$ increases, the opportunity for parallelisation also increases. Speedup
+can grow with $p$ if workload is scaled proportionally.
+\end{ppkey}
+
+Let $f \cdot T(n, p)$ be the time spent in the sequential portion on $p$
+processors, and $(1 - f) \cdot T(n, p)$ the time spent in the parallel
+portion. The sequential time to solve the same scaled problem is
+\[
+  T(n, 1) = f \cdot T(n, p) + p \cdot (1 - f) \cdot T(n, p).
+\]
+Therefore:
+\begin{ppdefn}
+\ppterm{Gustafson's speedup}:
+\[
+  S_p = \frac{T(n, 1)}{T(n, p)} = f + (1 - f) \cdot p.
+\]
+\end{ppdefn}
+
+Unlike Amdahl's Law, this speedup grows linearly with $p$ as long as $f$ is
+small---and $f$ shrinks as the parallelisable portion of the workload grows.
+
+\section{IsoEfficiency}
+
+Gustafson's Law tells us speedup can grow, but does not say \emph{by how much
+the workload must grow} to keep efficiency constant as $p$ increases. The
+\ppterm{isoefficiency function} answers this question.
+
+\begin{ppdefn}
+The \ppterm{isoefficiency function} gives the rate at which the problem size $W$
+(equivalently $T_1$) must grow as a function of $p$ to maintain a constant
+efficiency $E_c$:
+\[
+  E(n, p) = \frac{T_1}{p \cdot T(n, p)} = E_c.
+\]
+\end{ppdefn}
+
+Reformulating using $T_o = C_p - T_1 = p \cdot T_p - T_1$:
+\[
+  E = \frac{T_1}{T_1 + T_o} \implies W = \frac{E_c}{1 - E_c} \cdot T_o.
+\]
+
+This gives the minimum workload required to maintain efficiency $E_c$ given
+the overhead $T_o$. If $T_o$ grows faster than $W$, efficiency falls; the
+workload must grow at least as fast as $T_o$ to hold efficiency constant.
+
+\begin{ppnote}
+If $n$ need not grow with $p$ to maintain constant efficiency, the system is
+\ppterm{strongly scalable}. If $n$ must grow with $p$, the system is
+\ppterm{weakly scalable}. The isoefficiency function quantifies the rate of
+required growth.
+\end{ppnote}
+
+\begin{ppexample}
+Suppose $T_o = p \log p$ and we want to maintain $E_c = 0.8$. Then:
+\[
+  W = \frac{0.8}{0.2} \cdot T_o = 4 T_o = \Theta(T_o) = \Theta(p \log p).
+\]
+The workload must grow at least as $p \log p$ to keep efficiency at 80\%.
+If the workload grows slower, efficiency falls; if faster, efficiency may
+improve.
+\end{ppexample}
+
+\section{A Running Example: Matrix Multiplication}
+
+We tie all the metrics together with a concrete parallel matrix multiplication
+to build intuition.
+
+Assume $n \times n$ matrices. Sequential time: $T_1(n) = n^3$. Parallel time:
+\[
+  T_p = \frac{n^3}{p} + \underbrace{(n + 1000 \log p)}_{\text{overhead}}.
+\]
+The overhead captures the sequential setup (reading input, $O(n)$) and
+communication costs ($O(\log p)$ rounds at constant bandwidth).
+
+\subsection{Speedup and Efficiency at $n = 1000$}
+
+For $n = 1000$, computation dominates: $n^3 = 10^9 \gg n + 1000 \log p$.
+Therefore $T_p \approx n^3/p$, giving $S_p \approx p$ and $E_p \approx 1$.
+
+\subsection{Applying Amdahl's Law}
+
+The serial fraction is $f = n / n^3 = 1/n^2$. For $n = 1000$, $f = 10^{-6}$.
+Including the communication overhead for a fixed $p = 64$:
+\[
+  n + 1000 \log 64 = 1000 + 6000 = 7000 \implies f_{\text{eff}} \approx 7 \times 10^{-6}.
+\]
+So $S_{64} \approx 1/f_{\text{eff}} \approx 64$---ideal. But if $n = 100$:
+$S_{64} \approx 46$ and $E_{64} \approx 0.70$, showing that smaller problem
+sizes expose overheads.
+
+\subsection{Strong and Weak Scaling}
+
+For $n = 1000$, strong scaling is excellent up to $p = 64$ since $T_p \approx T_1/p$.
+Strong scaling degrades for $n = 100$ because the overhead terms become comparable
+to computation.
+
+For weak scaling, fix workload per processor at $W = 10^6$ operations:
+
+\begin{center}
+\begin{tabular}{ccc}
+\toprule
+$p$ & $n$ (from $n^3 = p \cdot 10^6$) & $T_p$ (approx) \\
+\midrule
+1  & 100 & $10^6$ \\
+8  & 200 & $10^6 + 3200$ \\
+64 & 400 & $10^6 + 6400$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Runtime stays approximately constant in $p$---the small increase comes only from
+the $1000 \log p$ communication term. This is very good weak scaling.
+
+\subsection{Gustafson's Law Applied}
+
+For $p = 64$, $n = 400$: the serial and overhead portion is $400 + 6000 = 6400$.
+\[
+  f = \frac{6400}{1006400} \approx 0.0064,
+  \qquad
+  S_{64} = 64 - 0.0064 \times 63 \approx 63.6.
+\]
+The serial fraction is negligibly small, so speedup remains near-ideal even
+under Gustafson's analysis.
+
+\subsection{IsoEfficiency}
+
+The overhead is $T_o = np + 1000p \log p$. For large $n$, the term $np$
+dominates. Setting $W = n^3 = \Theta(T_o) = \Theta(np)$:
+\[
+  n^3 = \Theta(np) \implies n^2 = \Theta(p) \implies n = \Theta(\sqrt{p})
+  \implies W = \Theta(p^{3/2}).
+\]
+To maintain constant efficiency, the workload must grow as $p^{3/2}$. This is
+acceptable but not ideal (ideal would be $\Theta(p)$); for every additional
+processor, the problem size must grow super-linearly.
+
+\begin{pppitfall}
+An isoefficiency of $\Theta(p^2)$ or worse means the system scales poorly:
+problem size must grow quadratically just to keep efficiency from falling.
+Always compute the isoefficiency function before declaring a parallel
+algorithm ``efficient.''
+\end{pppitfall}
+
+\section{A Note on Superlinear Speedup}
+
+Theoretically, speedup cannot exceed $p$: the ideal parallel time is $T_1/p$.
+In practice, however, \ppterm{superlinear speedup} ($S_p > p$) is observed.
+
+\begin{ppnote}
+Superlinear speedup arises when decomposing the problem across processors
+exposes \emph{architectural} benefits not captured by asymptotic analysis.
+The most common cause is cache effects: a sub-problem assigned to one
+processor fits entirely in its L2 or L3 cache, whereas the full problem did
+not fit in any single processor's cache. Effective memory latency drops from
+DRAM latency to cache latency, accelerating computation beyond what additional
+cores alone would predict. Smart data decomposition---both algorithmic and
+hardware-aware---is the mechanism.
+\end{ppnote}
+
+\section{The PRAM Model of Computation}
+
+To reason formally about parallel algorithms, we need a clean theoretical
+model that abstracts away architectural details. The \ppterm{PRAM}
+(Parallel Random Access Machine) model is the standard choice.
+
+\begin{ppdefn}
+A \ppterm{PRAM} consists of:
+\begin{itemize}
+  \item An arbitrary number of synchronous processors, each with a unique
+        integer identifier.
+  \item Unbounded local memory per processor.
+  \item A shared global memory accessible by any processor in a single step
+        (constant-time access---realistic for asymptotic analysis, unrealistic
+        in practice).
+\end{itemize}
+Processors execute in lock-step. Performance is measured by:
+\begin{itemize}
+  \item \textbf{Time}: steps taken by the longest-running processor.
+  \item \textbf{Work}: total operations across all processors.
+  \item \textbf{Cost}: $p \times \text{Time}$.
+\end{itemize}
+\end{ppdefn}
+
+\begin{ppnote}
+The PRAM's constant-time shared memory access is unrealistic but useful: it
+lets us focus on algorithmic parallelism rather than memory-hierarchy effects.
+Real systems pay variable latency for remote memory; the PRAM model establishes
+theoretical upper bounds that guide design even if they cannot be achieved
+exactly.
+\end{ppnote}
+
+\subsection{Concurrent Access: The Synchronisation Model}
+
+Multiple processors reading or writing the same shared location simultaneously
+raises consistency questions. The PRAM model is parameterised by its
+\ppterm{synchronisation model}, which specifies the rules for concurrent access.
+
+\begin{ppdefn}
+\ppterm{Exclusive Read, Exclusive Write (EREW)}: at any step, at most one
+processor may read and at most one may write any given shared location.
+Concurrent accesses to the same location are forbidden.
+\end{ppdefn}
+
+EREW is the most restrictive model. Algorithms designed for EREW are safe on
+essentially any hardware, but they may need extra steps to route data through
+intermediary locations when multiple processors need the same value.
+
+\begin{ppdefn}
+\ppterm{Concurrent Read, Exclusive Write (CREW)}: multiple processors may
+simultaneously read a shared location, but writes remain exclusive.
+\end{ppdefn}
+
+CREW matches the common producer-consumer pattern: one writer updates a
+shared result while many readers consume it. Most PRAM algorithms studied in
+practice assume CREW.
+
+\begin{ppdefn}
+\ppterm{Concurrent Read, Concurrent Write (CRCW)}: multiple processors may
+read and write the same location simultaneously. A \ppterm{write conflict
+resolution rule} determines the outcome.
+\end{ppdefn}
+
+The three standard write conflict rules for CRCW are:
+
+\begin{description}
+  \item[Priority CW.] The processor with the highest priority (typically the
+    lowest index) wins; its value is written.
+  \item[Common CW.] The write succeeds only if all concurrent writers attempt
+    to write the \emph{same} value. If any writer disagrees, the write fails
+    and the location retains its old value.
+  \item[Arbitrary/Random CW.] One of the conflicting writes is chosen
+    arbitrarily (or randomly); the rest are discarded.
+\end{description}
+
+\begin{ppnote}
+The models form a hierarchy by computational power per step (increasing left
+to right):
+\[
+  \text{EREW} \;\leq\; \text{CREW} \;\leq\; \text{Common CRCW}
+  \;\leq\; \text{Arbitrary CRCW} \;\leq\; \text{Priority CRCW}.
+\]
+A stronger model can simulate a weaker one with no overhead, but not vice
+versa. An algorithm correct under EREW is correct under all stronger models;
+an algorithm relying on Priority CRCW may not port to EREW without extra
+steps. (Diagram courtesy: S.~Khuller.)
+\end{ppnote}
+
+\begin{ppexample}
+Common CW arises naturally in \emph{leader election}: every processor writes
+its agreed-upon leader to a shared register. If all agree, the write succeeds;
+a failed write reveals that consensus was not reached.
+\end{ppexample}
+
+\section{Parallel Addition on the PRAM}
+
+As a first algorithm on the PRAM, consider summing $n$ elements of an array
+$A[0 \ldots n-1]$ under the CREW model.
+
+\textbf{Algorithm.} Use a binary-tree reduction:
+\begin{enumerate}
+  \item Phase~1 ($p = n$ processors): each processor $i$ copies $A[i]$ into
+        a working buffer $B[i]$.
+  \item Repeat: halve $p$. Each active processor $i < p$ computes
+        $B[i] \leftarrow B[2i] + B[2i+1]$.
+  \item After $\lceil \log_2 n \rceil$ rounds, $B[0]$ holds the sum.
+\end{enumerate}
+
+\begin{ppprogram}{PRAM parallel sum (binary-tree reduction)}{prog:pram-sum}
+\begin{lstlisting}[language={}]
+/* Pseudocode: n processors, shared array B[0..n-1] */
+forall i < n {
+    B[i] = A[i];
+    local p = n / 2;
+}
+forall i < p {
+    if (p == 0) stop;
+    B[i] = B[2*i] + B[2*i + 1];
+    p = p / 2;
+} repeat
+\end{lstlisting}
+\end{ppprogram}
+
+\textbf{Analysis.}
+\begin{itemize}
+  \item Time: $T_n = O(\log n)$ rounds.
+  \item Work: $W = O(n)$ total additions (the tree has $n - 1$ internal nodes).
+  \item Speedup: $S_n = n / \log n$.
+  \item Efficiency: $E_n = 1 / \log n$.
+  \item Cost: $C_n = n \cdot \log n$.
+\end{itemize}
+
+\begin{pppitfall}
+The algorithm is \emph{not} cost-optimal: cost is $\Theta(n \log n)$ while the
+sequential algorithm costs $\Theta(n)$. In later chapters we will see how to
+design work-optimal parallel algorithms that achieve $O(\log n)$ time
+\emph{and} $O(n)$ total work.
+\end{pppitfall}
+
+\section{Exercises}
+
+\begin{ppexercises}
+  \ppexercise{Prove that $S_\infty = 1/f$ under Amdahl's Law. What does
+  $f \to 0$ imply for scalability?}
+
+  \ppexercise{A parallel program has $T_1 = n^2$ and $T_p = n^2/p + n \log p$.
+  Compute $T_o$, find the isoefficiency function, and classify the algorithm
+  as strongly or weakly scalable.}
+
+  \ppexercise{Show that the binary-tree summation in Program~\ref{prog:pram-sum}
+  requires CREW (and not just EREW). Identify the step where multiple processors
+  read the same location simultaneously.}
+
+  \ppexercise{Design an EREW variant of the parallel sum algorithm. How many
+  additional steps does it require compared to the CREW version?}
+
+  \ppexercise{Suppose you observe $S_{16} = 20$ in a benchmark. Does this
+  violate Amdahl's Law? Explain what architectural phenomenon could account for
+  this result and under what conditions it disappears.}
+
+  \ppexercise{For the matrix multiplication example with $T_p = n^3/p +
+  (n + 1000 \log p)$, compute the isoefficiency function assuming the desired
+  efficiency is $E_c = 0.5$. How does the answer change if communication
+  overhead is reduced to $100 \log p$?}
+\end{ppexercises}
