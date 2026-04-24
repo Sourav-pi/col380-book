@@ -21,7 +21,7 @@ The \ppterm{cost} of a parallel execution is
 \[
   C_p \;:=\; p \times T_p.
 \]
-It captures the total processor-time expended. A parallel algorithm is
+This is a metric that captures the total "effort" or resource consumption of a parallel algorithm. A parallel algorithm is
 \ppterm{cost-optimal} when $p \cdot T_p = O(T_1)$, i.e., the total work
 done is asymptotically no more than the sequential baseline.
 \end{ppdefn}
@@ -142,6 +142,13 @@ speedup is $S_\infty = 1/0.1 = 10$, regardless of how many processors are
 added. Figure~\ref{fig:amdahl-speedup} illustrates how speedup saturates for
 different values of $n$.
 \end{ppexample}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{amdahl_plot.png} 
+    \caption{Amdahl's Law: Speedup $S$ vs. Number of Processors $p$ for varying problem sizes/serial fractions. Note how speedup saturates as $p \to \infty$.}
+    \label{fig:amdahl-speedup}
+\end{figure}
 
 % [Figure needed: Amdahl speedup curves for varying n (n=64, 192, 512),
 %  speedup (y-axis) vs. processor count p (x-axis), showing saturation.
@@ -290,16 +297,22 @@ under Gustafson's analysis.
 
 \subsection{IsoEfficiency}
 
-The overhead is $T_o = np + 1000p \log p$. For large $n$, the term $np$
-dominates. Setting $W = n^3 = \Theta(T_o) = \Theta(np)$:
-\[
-  n^3 = \Theta(np) \implies n^2 = \Theta(p) \implies n = \Theta(\sqrt{p})
-  \implies W = \Theta(p^{3/2}).
-\]
-To maintain constant efficiency, the workload must grow as $p^{3/2}$. This is
-acceptable but not ideal (ideal would be $\Theta(p)$); for every additional
-processor, the problem size must grow super-linearly.
+The total overhead for the system is given by:
+\[ T_o = np + 1000p \log p \]
 
+Efficiency $E$ is defined as the ratio of sequential execution time ($T_1$) to the total parallel resource expenditure:
+\[ E = \frac{T_1}{T_1 + T_o} \]
+
+Suppose we want to maintain a fixed efficiency of $0.8$. This requires the workload per processor to increase in $\Theta(T_o)$. Given the workload for this specific algorithm is $W = n^3$, we have:
+\[ n^3 = \Theta(np + 1000p \log p) \]
+
+For large $n$, the term $np$ dominates the overhead. Thus, the relationship simplifies to:
+\[ n^3 = \Theta(np) \implies n^2 = \Theta(p) \implies n = \Theta(\sqrt{p}) \]
+
+Substituting this back into the workload formula $W$:
+\[ W = \Theta(p^{3/2}) \]
+
+To maintain constant efficiency, the workload must grow as $p^{3/2}$. This is acceptable but not ideal (ideal would be $\Theta(p)$); for every additional processor, the problem size must grow super-linearly to prevent efficiency from dropping.
 \begin{pppitfall}
 An isoefficiency of $\Theta(p^2)$ or worse means the system scales poorly:
 problem size must grow quadratically just to keep efficiency from falling.
@@ -311,16 +324,16 @@ algorithm ``efficient.''
 
 Theoretically, speedup cannot exceed $p$: the ideal parallel time is $T_1/p$.
 In practice, however, \ppterm{superlinear speedup} ($S_p > p$) is observed.
-
 \begin{ppnote}
-Superlinear speedup arises when decomposing the problem across processors
-exposes \emph{architectural} benefits not captured by asymptotic analysis.
-The most common cause is cache effects: a sub-problem assigned to one
-processor fits entirely in its L2 or L3 cache, whereas the full problem did
-not fit in any single processor's cache. Effective memory latency drops from
-DRAM latency to cache latency, accelerating computation beyond what additional
-cores alone would predict. Smart data decomposition---both algorithmic and
-hardware-aware---is the mechanism.
+Superlinear speedup arises when decomposing a problem across processors exposes benefits not captured by standard sequential analysis. This occurs through two primary mechanisms:
+
+\begin{enumerate}
+    \item \textbf{Architectural Effects (Cache):} As the number of processors increases, the total available cache (L2/L3) grows. A sub-problem may fit entirely within a single processor's cache, whereas the original full problem was forced to reside in slower DRAM. This drop in effective memory latency accelerates computation beyond the linear scaling of cores.
+    
+    \item \textbf{Algorithmic Dynamics (Search Space Reduction):} In certain non-deterministic or heuristic algorithms, such as parallel graph pruning or Alpha-Beta search, multiple processors can discover "shortcuts" or pruning conditions earlier than a sequential execution. By sharing these conditions (e.g., a better global bound), the total volume of work performed by the parallel system dynamically reduces, as large branches of the search tree are discarded before they are even explored.
+\end{enumerate}
+
+In both cases, smart data and task decomposition—being both hardware-aware and algorithm-aware—allows the system to exceed the theoretical speedup limit of $S_p = p$.
 \end{ppnote}
 
 \section{The PRAM Model of Computation}
@@ -399,16 +412,11 @@ The three standard write conflict rules for CRCW are:
 \end{description}
 
 \begin{ppnote}
-The models form a hierarchy by computational power per step (increasing left
-to right):
-\[
-  \text{EREW} \;\leq\; \text{CREW} \;\leq\; \text{Common CRCW}
-  \;\leq\; \text{Arbitrary CRCW} \;\leq\; \text{Priority CRCW}.
-\]
-A stronger model can simulate a weaker one with no overhead, but not vice
-versa. An algorithm correct under EREW is correct under all stronger models;
-an algorithm relying on Priority CRCW may not port to EREW without extra
-steps. (Diagram courtesy: S.~Khuller.)
+The models form a hierarchy by computational power per step (increasing left to right):
+
+\centerline{\resizebox{0.95\textwidth}{!}{EREW $\le$ CREW $\le$ Common CRCW $\le$ Arbitrary CRCW $\le$ Priority}}
+
+A stronger model can simulate a weaker one with no overhead, but not vice versa. An algorithm correct under EREW is correct under all stronger models; however, an algorithm relying on Priority CRCW may not port to EREW without extra steps.
 \end{ppnote}
 
 \begin{ppexample}
