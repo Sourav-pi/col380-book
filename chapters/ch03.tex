@@ -1,6 +1,29 @@
 \chapter{Performance Metrics and the PRAM Model}
 
+% -------------------------------------------------------------------
+\section*{Learning Outcomes}
+% -------------------------------------------------------------------
+By the end of this chapter, you will be able to:
+\begin{itemize}
+  \item Define speedup, cost, efficiency, and parallelism overhead, and
+        compute them for a given parallel algorithm.
+  \item Distinguish between strong scaling and weak scaling, and explain
+        when each is the appropriate measure.
+  \item Apply Amdahl's Law to derive an upper bound on speedup for a fixed
+        problem size, and explain why that bound is pessimistic.
+  \item Apply Gustafson's Law to compute speedup under a scaled-workload
+        model, and contrast it with Amdahl's Law.
+  \item Derive the isoefficiency function for a parallel system and use it
+        to classify the system as strongly or weakly scalable.
+  \item Describe the PRAM model of computation and its three synchronisation
+        variants (EREW, CREW, CRCW).
+  \item Analyse a simple PRAM algorithm (parallel addition) for time, work,
+        cost, speedup, and efficiency.
+\end{itemize}
+
+% -------------------------------------------------------------------
 \section{Revisiting Performance Metrics}
+% -------------------------------------------------------------------
 
 Understanding how a parallel program performs requires more than just measuring
 wall-clock time. We need a vocabulary that captures \emph{how efficiently}
@@ -29,7 +52,7 @@ done is asymptotically no more than the sequential baseline.
 \begin{ppexample}
 Suppose $T_1 = 100$ and $T_8 = 20$. Then $S_8 = 5$ and $C_8 = 160$. The
 parallel system used 60\% more total processor-time than a sequential run,
-so it is not cost-optimal.
+so it is \emph{not} cost-optimal.
 \end{ppexample}
 
 \subsection{Overhead and Efficiency}
@@ -67,7 +90,9 @@ Raw speedup numbers can be misleading. Always report efficiency alongside
 speedup---a speedup of 20 on 64 processors is underwhelming, not impressive.
 \end{pppitfall}
 
+% -------------------------------------------------------------------
 \section{Scalability}
+% -------------------------------------------------------------------
 
 Raw speedup is a snapshot at one problem size and one processor count.
 \ppterm{Scalability} asks how performance evolves as \emph{both} problem
@@ -119,7 +144,9 @@ Runtime grows only slightly---the small increase is due to communication
 overhead that scales sub-linearly.
 \end{ppexample}
 
+% -------------------------------------------------------------------
 \section{Amdahl's Law}
+% -------------------------------------------------------------------
 
 \begin{ppkey}
 Amdahl's Law bounds the speedup achievable for a fixed problem size when
@@ -139,13 +166,34 @@ $(1 - f)$ is fully parallelisable. Then:
 \begin{ppexample}
 If only 10\% of the program is sequential ($f = 0.1$), the maximum possible
 speedup is $S_\infty = 1/0.1 = 10$, regardless of how many processors are
-added. Figure~\ref{fig:amdahl-speedup} illustrates how speedup saturates for
-different values of $n$.
+added.
 \end{ppexample}
 
-% [Figure needed: Amdahl speedup curves for varying n (n=64, 192, 512),
-%  speedup (y-axis) vs. processor count p (x-axis), showing saturation.
-%  Source: Lecture 22, Slide 6.]
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+\begin{axis}[ppplot,
+  xlabel={Number of processors $p$},
+  ylabel={Speedup $S_p$},
+  xmin=1, xmax=64, ymin=1, ymax=22,
+  xtick={1,8,16,32,64},
+]
+\addplot[black, dashed, thick, domain=1:22, samples=22] {x};
+\addlegendentry{Ideal ($S_p = p$)}
+\addplot[color=PPBlue,   thick, domain=1:64, samples=100] {1/(0.05 + 0.95/x)};
+\addlegendentry{$f = 0.05$, $S_\infty = 20$}
+\addplot[color=PPGood,   thick, domain=1:64, samples=100] {1/(0.1  + 0.9/x)};
+\addlegendentry{$f = 0.10$, $S_\infty = 10$}
+\addplot[color=orange,   thick, domain=1:64, samples=100] {1/(0.25 + 0.75/x)};
+\addlegendentry{$f = 0.25$, $S_\infty = 4$}
+\addplot[color=PPWarn,   thick, domain=1:64, samples=100] {1/(0.5  + 0.5/x)};
+\addlegendentry{$f = 0.50$, $S_\infty = 2$}
+\end{axis}
+\end{tikzpicture}
+\caption{Amdahl's Law: speedup saturates at $1/f$ regardless of processor count.
+         Even with only 5\% sequential code the ceiling is~20.}
+\label{fig:amdahl-speedup}
+\end{figure}
 
 \begin{pppitfall}
 Improving the parallel portion of a program yields diminishing returns if the
@@ -157,7 +205,9 @@ sequential setup and teardown dominate.
 Amdahl's Law applies to fixed problem sizes. It does not capture what happens
 when workload grows with the number of processors---that is Gustafson's domain.
 
+% -------------------------------------------------------------------
 \section{Gustafson's Law}
+% -------------------------------------------------------------------
 
 Amdahl's Law is pessimistic because it holds problem size fixed. In practice,
 when more processors become available, practitioners scale up the problem size
@@ -185,14 +235,44 @@ Therefore:
 Unlike Amdahl's Law, this speedup grows linearly with $p$ as long as $f$ is
 small---and $f$ shrinks as the parallelisable portion of the workload grows.
 
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+\begin{axis}[ppplot,
+  xlabel={Number of processors $p$},
+  ylabel={Speedup $S_p$},
+  xmin=1, xmax=16, ymin=1, ymax=16,
+  xtick={1,4,8,12,16},
+]
+\addplot[black, dashed, thick, domain=1:16, samples=16] {x};
+\addlegendentry{Ideal}
+\addplot[color=PPWarn, thick, domain=1:16, samples=100] {1/(0.1 + 0.9/x)};
+\addlegendentry{Amdahl, $f=0.1$}
+\addplot[color=PPBlue, thick, domain=1:16, samples=16]  {0.1 + 0.9*x};
+\addlegendentry{Gustafson, $f=0.1$}
+\addplot[color=PPGood, thick, domain=1:16, samples=100] {1/(0.25 + 0.75/x)};
+\addlegendentry{Amdahl, $f=0.25$}
+\addplot[color=orange, thick, domain=1:16, samples=16]  {0.25 + 0.75*x};
+\addlegendentry{Gustafson, $f=0.25$}
+\end{axis}
+\end{tikzpicture}
+\caption{Amdahl vs.\ Gustafson speedup for the same serial fraction $f$.
+         Amdahl (fixed workload) saturates; Gustafson (scaled workload) grows
+         linearly---the key insight is that scaling the problem size reveals
+         more parallelism.}
+\label{fig:amdahl-vs-gustafson}
+\end{figure}
+
+% -------------------------------------------------------------------
 \section{IsoEfficiency}
+% -------------------------------------------------------------------
 
 Gustafson's Law tells us speedup can grow, but does not say \emph{by how much
 the workload must grow} to keep efficiency constant as $p$ increases. The
 \ppterm{isoefficiency function} answers this question.
 
 \begin{ppdefn}
-The \ppterm{isoefficiency function} gives the rate at which the problem size $W$
+The \ppterm{isoefficiency function} gives the rate at which the workload $W$
 (equivalently $T_1$) must grow as a function of $p$ to maintain a constant
 efficiency $E_c$:
 \[
@@ -200,7 +280,7 @@ efficiency $E_c$:
 \]
 \end{ppdefn}
 
-Reformulating using $T_o = C_p - T_1 = p \cdot T_p - T_1$:
+Reformulating using $T_o = p \cdot T_p - T_1$:
 \[
   E = \frac{T_1}{T_1 + T_o} \implies W = \frac{E_c}{1 - E_c} \cdot T_o.
 \]
@@ -226,7 +306,9 @@ If the workload grows slower, efficiency falls; if faster, efficiency may
 improve.
 \end{ppexample}
 
+% -------------------------------------------------------------------
 \section{A Running Example: Matrix Multiplication}
+% -------------------------------------------------------------------
 
 We tie all the metrics together with a concrete parallel matrix multiplication
 to build intuition.
@@ -283,7 +365,7 @@ For $p = 64$, $n = 400$: the serial and overhead portion is $400 + 6000 = 6400$.
 \[
   f = \frac{6400}{1006400} \approx 0.0064,
   \qquad
-  S_{64} = 64 - 0.0064 \times 63 \approx 63.6.
+  S_{64} = f + (1-f) \cdot p = 0.0064 + 0.9936 \times 64 \approx 63.6.
 \]
 The serial fraction is negligibly small, so speedup remains near-ideal even
 under Gustafson's analysis.
@@ -307,7 +389,9 @@ Always compute the isoefficiency function before declaring a parallel
 algorithm ``efficient.''
 \end{pppitfall}
 
+% -------------------------------------------------------------------
 \section{A Note on Superlinear Speedup}
+% -------------------------------------------------------------------
 
 Theoretically, speedup cannot exceed $p$: the ideal parallel time is $T_1/p$.
 In practice, however, \ppterm{superlinear speedup} ($S_p > p$) is observed.
@@ -323,7 +407,9 @@ cores alone would predict. Smart data decomposition---both algorithmic and
 hardware-aware---is the mechanism.
 \end{ppnote}
 
+% -------------------------------------------------------------------
 \section{The PRAM Model of Computation}
+% -------------------------------------------------------------------
 
 To reason formally about parallel algorithms, we need a clean theoretical
 model that abstracts away architectural details. The \ppterm{PRAM}
@@ -417,12 +503,15 @@ its agreed-upon leader to a shared register. If all agree, the write succeeds;
 a failed write reveals that consensus was not reached.
 \end{ppexample}
 
+% -------------------------------------------------------------------
 \section{Parallel Addition on the PRAM}
+% -------------------------------------------------------------------
 
 As a first algorithm on the PRAM, consider summing $n$ elements of an array
 $A[0 \ldots n-1]$ under the CREW model.
 
-\textbf{Algorithm.} Use a binary-tree reduction:
+\textbf{Algorithm.} Use a binary-tree reduction
+(Figure~\ref{fig:pram-tree} shows an example for $n=8$):
 \begin{enumerate}
   \item Phase~1 ($p = n$ processors): each processor $i$ copies $A[i]$ into
         a working buffer $B[i]$.
@@ -430,6 +519,58 @@ $A[0 \ldots n-1]$ under the CREW model.
         $B[i] \leftarrow B[2i] + B[2i+1]$.
   \item After $\lceil \log_2 n \rceil$ rounds, $B[0]$ holds the sum.
 \end{enumerate}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+  >=Stealth,
+  box/.style={draw=PPBlue!60, fill=PPLight, rounded corners=2pt,
+              minimum width=0.85cm, minimum height=0.42cm, font=\small},
+  sum/.style={draw=PPGood!80, fill=PPGood!12, rounded corners=2pt,
+              minimum width=0.95cm, minimum height=0.42cm,
+              font=\small\bfseries},
+  lbl/.style={font=\footnotesize\itshape, text=PPGray},
+]
+% Row 0 — initial values (8 processors)
+\node[box] (a0) at (0*1.5, 0)   {3};
+\node[box] (a1) at (1*1.5, 0)   {7};
+\node[box] (a2) at (2*1.5, 0)   {11};
+\node[box] (a3) at (3*1.5, 0)   {15};
+\node[box] (a4) at (4*1.5, 0)   {2};
+\node[box] (a5) at (5*1.5, 0)   {4};
+\node[box] (a6) at (6*1.5, 0)   {8};
+\node[box] (a7) at (7*1.5, 0)   {6};
+% Row 1 — round 1 (4 processors)
+\node[sum] (b0) at (0.75,  1.3) {10};
+\node[sum] (b1) at (3.75,  1.3) {26};
+\node[sum] (b2) at (6.75,  1.3) {6};
+\node[sum] (b3) at (9.75,  1.3) {14};
+% Row 2 — round 2 (2 processors)
+\node[sum] (c0) at (2.25,  2.6) {36};
+\node[sum] (c1) at (8.25,  2.6) {20};
+% Row 3 — round 3 (1 processor)
+\node[sum] (d0) at (5.25,  3.9) {56};
+% Edges: row 0 -> row 1
+\foreach \src/\dst in {a0/b0, a1/b0, a2/b1, a3/b1, a4/b2, a5/b2, a6/b3, a7/b3}
+  \draw[->] (\src) -- (\dst);
+% Edges: row 1 -> row 2
+\foreach \src/\dst in {b0/c0, b1/c0, b2/c1, b3/c1}
+  \draw[->] (\src) -- (\dst);
+% Edges: row 2 -> row 3
+\draw[->] (c0) -- (d0);
+\draw[->] (c1) -- (d0);
+% Row labels
+\node[lbl, left=0.25cm of a0] {Round 0};
+\node[lbl, left=0.25cm of b0] {Round 1};
+\node[lbl, left=0.25cm of c0] {Round 2};
+\node[lbl, left=0.25cm of d0] {Round 3};
+\end{tikzpicture}
+\caption{Binary-tree reduction for $n=8$ elements. Each round halves the active
+         processor count; the sum~56 is reached in $\lceil\log_2 8\rceil = 3$
+         rounds. Processors owning a right-child value (\emph{odd} indices) are
+         idle after Round~1.}
+\label{fig:pram-tree}
+\end{figure}
 
 \begin{ppprogram}{PRAM parallel sum (binary-tree reduction)}{prog:pram-sum}
 \begin{lstlisting}[language={}]
@@ -462,7 +603,43 @@ design work-optimal parallel algorithms that achieve $O(\log n)$ time
 \emph{and} $O(n)$ total work.
 \end{pppitfall}
 
+% -------------------------------------------------------------------
+\section{Key Takeaways}
+% -------------------------------------------------------------------
+
+\begin{itemize}
+  \item \ppterm{Speedup} $S_p = T_1/T_p$ and \ppterm{cost} $C_p = p \cdot T_p$
+        are the two primary measures; a cost-optimal algorithm satisfies
+        $C_p = O(T_1)$.
+  \item \ppterm{Efficiency} $E_p = S_p/p$ tells you how much of each processor's
+        time is doing useful work; ideal efficiency is 1. Always report it
+        alongside speedup.
+  \item \ppterm{Strong scaling} fixes problem size and increases $p$; it
+        is bounded by the sequential fraction (Amdahl's Law) and by growing
+        communication/synchronisation overheads.
+  \item \ppterm{Weak scaling} grows problem size proportionally with $p$;
+        ideal runtime stays constant. Gustafson's Law quantifies speedup under
+        this model and shows it can grow linearly with $p$.
+  \item \ppterm{Amdahl's Law}: $S_\infty = 1/f$---the serial fraction $f$
+        places a hard ceiling on achievable speedup regardless of processor count.
+  \item \ppterm{Gustafson's Law}: $S_p = f + (1-f)p$---as workload scales
+        with $p$, the serial fraction shrinks and speedup grows linearly.
+  \item The \ppterm{isoefficiency function} $W = \frac{E_c}{1-E_c} T_o$ gives
+        the minimum workload growth rate needed to maintain constant efficiency;
+        a lower-order isoefficiency means better scalability.
+  \item \ppterm{Superlinear speedup} ($S_p > p$) is possible in practice due
+        to cache effects, but cannot be predicted by the PRAM model alone.
+  \item The \ppterm{PRAM model} provides a clean theoretical foundation:
+        synchronous processors, constant-time shared memory, and a hierarchy of
+        concurrent access models (EREW $\leq$ CREW $\leq$ CRCW).
+  \item The binary-tree parallel sum achieves $O(\log n)$ time but is
+        \emph{not} cost-optimal ($\Theta(n \log n)$ cost vs.\ $\Theta(n)$
+        sequential).
+\end{itemize}
+
+% -------------------------------------------------------------------
 \section{Exercises}
+% -------------------------------------------------------------------
 
 \begin{ppexercises}
   \ppexercise{Prove that $S_\infty = 1/f$ under Amdahl's Law. What does
@@ -488,3 +665,84 @@ design work-optimal parallel algorithms that achieve $O(\log n)$ time
   efficiency is $E_c = 0.5$. How does the answer change if communication
   overhead is reduced to $100 \log p$?}
 \end{ppexercises}
+
+% -------------------------------------------------------------------
+\section*{Solutions}
+% -------------------------------------------------------------------
+
+\textbf{Solution 1.}
+From Amdahl's formula $S_p = 1/(f + (1-f)/p)$, take the limit as $p \to \infty$:
+\[
+  \lim_{p \to \infty} S_p = \lim_{p \to \infty} \frac{1}{f + (1-f)/p} = \frac{1}{f + 0} = \frac{1}{f} = S_\infty.
+\]
+As $f \to 0$, $S_\infty \to \infty$: there is no theoretical ceiling on speedup
+when the program is fully parallelisable. In practice, communication and
+synchronisation overheads prevent this limit from being reached.
+
+\medskip
+\textbf{Solution 2.}
+\[
+  T_o = p \cdot T_p - T_1 = p\!\left(\frac{n^2}{p} + n \log p\right) - n^2
+       = n^2 + pn \log p - n^2 = pn \log p.
+\]
+For constant efficiency $E_c$:
+\[
+  W = \frac{E_c}{1-E_c} \cdot T_o = \Theta(pn \log p).
+\]
+Since $W = T_1 = n^2$, substituting gives $n^2 = \Theta(pn \log p)$, so
+$n = \Theta(p \log p)$ and $W = \Theta(p^2 \log^2 p)$.
+The workload must grow super-quadratically with $p$---the algorithm is
+\ppterm{weakly scalable}, and scales poorly.
+
+\medskip
+\textbf{Solution 3.}
+In Phase~1, processor $i$ writes $B[i] = A[i]$---all writes are to distinct
+locations, so EREW suffices. In the reduction phase, at step $k$ processor $i$
+reads both $B[2i]$ and $B[2i+1]$. At the same step, processor $i-1$ reads
+$B[2(i-1)+1] = B[2i-1]$ and $B[2i]$. Hence $B[2i]$ is read simultaneously by
+processors $i$ and $i-1$---this is a concurrent read. EREW does not permit
+this; CREW is the minimum required model.
+
+\medskip
+\textbf{Solution 4.}
+To avoid concurrent reads, use an \emph{odd-even} reduction: at step $k$,
+only processor $i$ reads $B[i + 2^{k-1}]$ and adds it to $B[i]$. No two
+active processors read the same location in the same step (processor $i$ reads
+index $i + 2^{k-1}$, which is unique to $i$ at that step). The algorithm
+still requires $\log_2 n$ steps, so the time complexity is unchanged;
+the only difference is the stricter access pattern. EREW requires no extra
+steps in this formulation---the same $O(\log n)$ time bound holds.
+
+\medskip
+\textbf{Solution 5.}
+Amdahl's Law is a theoretical bound derived under the assumption of constant
+sequential and parallel execution costs with no data-locality effects.
+$S_{16} = 20 > 16$ does \emph{not} violate the \emph{law} in practice---it
+violates the asymptotic model's assumptions. The mechanism is cache-induced
+superlinear speedup: the full problem does not fit in a single processor's
+cache, causing frequent DRAM accesses. When the problem is split across 16
+processors, each sub-problem fits in its local cache, reducing effective memory
+latency from $\sim$100 ns (DRAM) to $\sim$1--5 ns (L2/L3). This latency
+reduction is multiplicative and not captured by the work-only model.
+Superlinear speedup disappears when the single-processor data set also fits in
+cache (smaller problem size), or when the parallel decomposition increases
+inter-processor communication to the point where network latency outweighs
+cache savings.
+
+\medskip
+\textbf{Solution 6.}
+With $E_c = 0.5$: $W = \frac{0.5}{0.5} T_o = T_o$.
+The overhead is $T_o = np + 1000p \log p$. For large $n$, $np$ dominates:
+\[
+  n^3 = \Theta(np) \implies n^2 = \Theta(p) \implies n = \Theta(\sqrt{p})
+  \implies W = \Theta(p^{3/2}).
+\]
+(The constant factor changes from the $E_c = 0.8$ case but the asymptotic
+class is the same.)
+
+If the overhead is reduced to $T_o = np + 100p \log p$, for large $n$ the
+dominant term is still $np$, so the isoefficiency remains $W = \Theta(p^{3/2})$.
+The constant coefficient of the overhead shrinks, meaning the system can
+maintain the target efficiency with a smaller absolute workload, but the
+asymptotic growth rate is unchanged.
+

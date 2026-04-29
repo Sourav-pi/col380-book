@@ -98,6 +98,27 @@
 \RequirePackage{makeidx}
 \makeindex
 
+% --- Diagrams and plots ---
+\RequirePackage{tikz}
+\RequirePackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{arrows.meta,positioning}
+
+% Default pgfplots style using book colour scheme
+\pgfplotsset{
+  ppplot/.style={
+    width=0.82\linewidth,
+    height=5.5cm,
+    grid=major,
+    grid style={line width=0.2pt, draw=gray!25},
+    xlabel style={font=\small},
+    ylabel style={font=\small},
+    tick label style={font=\small},
+    legend style={font=\small, draw=gray!40},
+    legend pos=north west,
+  }
+}
+
 % --- Boxes and code ---
 \RequirePackage{ppboxes}
 \RequirePackage{ppcodelistings}
